@@ -1,48 +1,18 @@
-import torch
-from PIL import Image
-from transformers import DPTImageProcessor, DPTForDepthEstimation
-import numpy as np
-import os
-import math
-import open3d as o3d
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 import cv2
-
-class DepthEstimator:
-    def __init__(self, model_name="Intel/dpt-hybrid-midas", device="cpu"):
-        self.device = device
-        self.processor = DPTImageProcessor.from_pretrained(model_name)
-        self.model = DPTForDepthEstimation.from_pretrained(model_name).to(device)
-        self.model.eval()
-
-    def predictDepth(self, image):
-        """Predict depth map from an image."""
-        inputs = self.processor(images=image, return_tensors="pt")
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            predicted_depth = outputs.predicted_depth
-
-            # Interpolate to original size
-            prediction = torch.nn.functional.interpolate(
-                predicted_depth.unsqueeze(1),
-                size=image.size[::-1],  # Width, Height of the original image
-                mode="bicubic",
-                align_corners=False,
-            ).squeeze().cpu().numpy()  # Remove batch dimension and transfer to CPU
-
-        # Normalize the depth map for visualization or further processing
-        normalized_depth_map = (prediction * 255 / np.max(prediction)).astype("uint8")
-
-        return normalized_depth_map
+import os
+import numpy as np
+import torch
+from PIL import Image
+import open3d as o3d
+from tsr.system import TSR
+from tsr.utils import resize_foreground
 
 
 class BoundaryDepthExtractor:
-    def __init__(self, depth_model_checkpoint):
+    def __init__(self):
         # Initialize the Depth Estimator
-        self.depth_estimator = DepthEstimator(model_name=depth_model_checkpoint)
         self.start = """# .PCD v.7 - Point Cloud Data file format
 VERSION .7
 FIELDS x y z
@@ -55,83 +25,67 @@ VIEWPOINT 0 0 0 1 0 0 0
 POINTS {0}
 DATA ascii
 """
-    def vete(self,v, vt):
-        if v == vt:
-            return str(v)
-        return str(v) + "/" + str(vt)
 
-    def createObj(self, img, objPath='model.obj', mtlPath='model.mtl', matName='colored', useMaterial=False):
-        w = img.shape[1]
-        h = img.shape[0]
+    def createOBJ(self, input, output, foreground_ratio=0.85, mc_resolution=256, model_save_format='obj'):
 
-        FOV = math.pi / 4
-        D = (img.shape[0] / 2) / math.tan(FOV / 2)
+        output_dir = output
+        os.makedirs(output_dir, exist_ok=True)
 
-        if max(objPath.find('\\'), objPath.find('/')) > -1:
-            os.makedirs(os.path.dirname(mtlPath), exist_ok=True)
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-        with open(objPath, "w") as f:
-            if useMaterial:
-                f.write("mtllib " + mtlPath + "\n")
-                f.write("usemtl " + matName + "\n")
+        print("Initializing model")
+        model = TSR.from_pretrained(
+            'stabilityai/TripoSR',
+            config_name="config.yaml",
+            weight_name="model.ckpt",
+        )
+        model.to(device)
+        print("Model initialized")
 
-            ids = np.zeros((img.shape[1], img.shape[0]), int)
-            vid = 1
+        image_path = input
+        image = Image.open(image_path)
+        try:
+            image = resize_foreground(image, foreground_ratio)
+        except AssertionError:
+            image = image.convert("RGBA")
+        image = np.array(image).astype(np.float32) / 255.0
+        image = image[:, :, :3] * image[:, :, 3:4] + (1 - image[:, :, 3:4]) * 0.5
+        image = Image.fromarray((image * 255.0).astype(np.uint8))
 
-            all_x = []
-            all_y = []
-            all_z = []
+        print("Running model")
+        with torch.no_grad():
+            scene_codes = model([image], device=device)
+        print("Model run completed")
 
-            for u in range(0, w):
-                for v in range(h - 1, -1, -1):
+        print("Exporting mesh")
+        meshes = model.extract_mesh(scene_codes, resolution=mc_resolution)
+        meshes[0].export(os.path.join(output_dir, "mesh." + model_save_format))
 
-                    d = img[v, u]
+        mesh = o3d.io.read_triangle_mesh('output/mesh.obj')
+        # Define the rotation matrices
+        rotation_y = o3d.geometry.get_rotation_matrix_from_axis_angle(
+            np.array([0, 1, 0]) * (-np.pi / 2))  # 180 degrees around Y-axis
+        rotation_x = o3d.geometry.get_rotation_matrix_from_axis_angle(np.array([0, 0, 1]) * (-np.pi / 2))
 
-                    ids[u, v] = vid
-                    if d == 0.0:
-                        ids[u, v] = 0
-                    vid += 1
+        # Apply the rotations
+        mesh.rotate(rotation_y, center=mesh.get_center())
+        mesh.rotate(rotation_x, center=mesh.get_center())
+        point_cloud = mesh.sample_points_poisson_disk(number_of_points=100000)
 
-                    x = u - w / 2
-                    y = v - h / 2
-                    z = -D
-
-                    norm = 1 / math.sqrt(x * x + y * y + z * z)
-
-                    t = d / (z * norm)
-
-                    x = -t * x * norm
-                    y = t * y * norm
-                    z = -t * z * norm
-
-                    f.write("v " + str(x) + " " + str(y) + " " + str(z) + "\n")
-
-            for u in range(0, img.shape[1]):
-                for v in range(0, img.shape[0]):
-                    f.write("vt " + str(u / img.shape[1]) +
-                            " " + str(v / img.shape[0]) + "\n")
-
-            for u in range(0, img.shape[1] - 1):
-                for v in range(0, img.shape[0] - 1):
-
-                    v1 = ids[u, v]
-                    v3 = ids[u + 1, v]
-                    v2 = ids[u, v + 1]
-                    v4 = ids[u + 1, v + 1]
-
-                    if v1 == 0 or v2 == 0 or v3 == 0 or v4 == 0:
-                        continue
-
-                    f.write("f " + self.vete(v1, v1) + " " +
-                            self.vete(v2, v2) + " " + self.vete(v3, v3) + "\n")
-                    f.write("f " + self.vete(v3, v3) + " " +
-                            self.vete(v2, v2) + " " + self.vete(v4, v4) + "\n")
-
+        # Save the point cloud as a PCD file
+        o3d.io.write_point_cloud(f"{output}output.pcd", point_cloud)
+        # os.remove(output+'mesh.obj')
+        print("Mesh exported")
 
     def extractBoundaryDepth(self, image_path, filename="model.pcd"):
+        # kernel = np.array([[-1, -1, -1],
+        #                    [-1, 9, -1],
+        #                    [-1, -1, -1]])
+
         input_image = Image.open(image_path)
         depth_map = self.depth_estimator.predictDepth(input_image)
         print("Depth map shape:", depth_map.shape)
+
         # Convert to PIL Image and display
         img = Image.fromarray(depth_map)
         depth_array = np.array(img)
@@ -158,15 +112,7 @@ DATA ascii
             for point in points:
                 outfile.write("{} {} {}\n".format(point[0], point[1], point[2]))
 
-        os.remove("model.obj")
 
-    # def verticalPlaneExtraction(self, file):
-    #     """Focus on vertical planes to reduce the 3D boundary extraction problem to 2D."""
-    #     pcd = o3d.io.read_point_cloud(file)
-    #
-    #     # Convert to numpy array
-    #     points = np.asarray(pcd.points)
-    #     return points
 
     def verticalPlaneExtraction(self, file):
         """Focus on vertical planes to reduce the 3D boundary extraction problem to 2D."""
