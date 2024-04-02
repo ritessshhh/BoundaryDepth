@@ -70,10 +70,10 @@ DATA ascii
         # Apply the rotations
         mesh.rotate(rotation_y, center=mesh.get_center())
         mesh.rotate(rotation_x, center=mesh.get_center())
-        point_cloud = mesh.sample_points_poisson_disk(number_of_points=100000)
+        point_cloud = mesh.sample_points_poisson_disk(number_of_points=500000)
 
         # Save the point cloud as a PCD file
-        o3d.io.write_point_cloud(f"{output}output.pcd", point_cloud)
+        o3d.io.write_point_cloud(f"{output}mesh.pcd", point_cloud)
         # os.remove(output+'mesh.obj')
         print("Mesh exported")
 
