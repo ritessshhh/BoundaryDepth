@@ -8,6 +8,7 @@ from PIL import Image
 import open3d as o3d
 from tsr.system import TSR
 from tsr.utils import resize_foreground
+import json
 
 
 class BoundaryDepthExtractor:
@@ -213,3 +214,60 @@ DATA ascii
         plt.ylabel('Y axis')
         plt.gca().set_aspect('equal', adjustable='box')
         plt.show()
+
+    def create_json_file(self, extrinsic, intrinsic, vertices, file_name='camera_vertices.json'):
+        # Extract intrinsic parameters if it's a PinholeCameraIntrinsic object
+        if isinstance(intrinsic, o3d.camera.PinholeCameraIntrinsic):
+            intrinsic_data = {
+                'width': intrinsic.width,
+                'height': intrinsic.height,
+                'fx': intrinsic.get_focal_length()[0],
+                'fy': intrinsic.get_focal_length()[1],
+                'cx': intrinsic.get_principal_point()[0],
+                'cy': intrinsic.get_principal_point()[1],
+                'intrinsic_matrix': intrinsic.intrinsic_matrix.tolist()
+            }
+        else:
+            # Assuming intrinsic is already in a serializable format
+            intrinsic_data = intrinsic
+
+        data = {
+            'camera': {
+                'extrinsic': extrinsic.tolist() if isinstance(extrinsic, np.ndarray) else extrinsic,
+                'intrinsic': intrinsic_data
+            },
+            'vertices': vertices.tolist() if isinstance(vertices, np.ndarray) else vertices
+        }
+
+        with open(file_name, 'w') as f:
+            json.dump(data, f, indent=4)
+
+    def visualizeRenderedScene(self, input, vertices, renderJson=False):
+        # Load the PCD file
+        pcd = o3d.io.read_point_cloud(input)
+
+        # Visualize the point cloud
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+
+        # Add the point cloud to the visualizer
+        vis.add_geometry(pcd)
+
+        # Set the view point
+        view_ctl = vis.get_view_control()
+        cam_params = view_ctl.convert_to_pinhole_camera_parameters()
+
+        # You can adjust these values to change the camera angle and position
+        cam_params.extrinsic = np.array([[-1, 0, 0, 0],  # Rotate 180 degrees around y-axis
+                                         [0, -1, 0, 0],
+                                         [0, 0, -1, 0.8],  # Invert z-axis to maintain right-handed coordinate system
+                                         [0, 0, 0, 1]])
+
+        view_ctl.convert_from_pinhole_camera_parameters(cam_params)
+
+        # Run the visualizer
+        vis.run()
+        vis.destroy_window()
+
+        if renderJson:
+            self.create_json_file(cam_params.extrinsic, cam_params.intrinsic, vertices)
