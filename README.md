@@ -7,7 +7,7 @@ This project implements a multi-step pipeline for extracting boundary depth from
 Before running the script, ensure that you have Python 3.6 or newer installed on your system. You will also need to install the following dependencies:
 
 ```bash
-pip install torch torchvision Pillow transformers numpy open3d scipy matplotlib opencv-python
+pip install -r requirements.txt
 ```
 
 ## How It Works:
