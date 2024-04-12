@@ -24,11 +24,95 @@ pip install torch torchvision Pillow transformers numpy open3d scipy matplotlib 
    
 6. **Polygon Approximation:** The 2D boundary is then approximated with a polygon to simplify the representation. This approximation is done using the Douglas-Peucker algorithm, which reduces the number of points in the boundary while maintaining its overall shape. The ```polygonApproximation``` method in the ```BoundaryDepthExtractor``` class performs this step.
 
-## Input:
-<img width="500" alt="Screenshot 2024-03-07 at 10 54 16 PM" src="https://github.com/ritessshhh/BoundaryDepth/assets/81812754/15230bb3-9046-46d1-b18a-387e770e12df">
+## Input (1242 x 822):
+<img width="500" alt="emptyRoom" src="https://github.com/ritessshhh/BoundaryDepthExtraction/assets/81812754/fcfa2a85-f5b6-41e6-96c8-8734bbf6db98">
 
 ## Polygon Approximation:
+<img width="500" alt="Screenshot 2024-04-05 at 2 14 29 AM" src="https://github.com/ritessshhh/BoundaryDepthExtraction/assets/81812754/6aa05bf7-7d51-41e6-b4bc-eee72bb48528">
 
-<img width="500" alt="Screenshot 2024-03-15 at 8 33 01 PM" src="https://github.com/ritessshhh/BoundaryDepth/assets/81812754/33c1305c-ece7-42c5-a67a-9071be5a23ab">
+## Camera Parameters (Saved as a JSON file):
+```bash
+{
+    "camera": {
+        "extrinsic": [
+            [
+                1.0,
+                0.0,
+                0.0,
+                0.03777360018751525
+            ],
+            [
+                -0.0,
+                -1.0,
+                -0.0,
+                0.0074896122114004515
+            ],
+            [
+                -0.0,
+                -0.0,
+                -1.0,
+                0.9023693128733252
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        ],
+        "intrinsic": {
+            "width": 1242,
+            "height": 822,
+            "fx": 711.8728819108087,
+            "fy": 711.8728819108087,
+            "cx": 620.5,
+            "cy": 410.5,
+            "intrinsic_matrix": [
+                [
+                    711.8728819108087,
+                    0.0,
+                    620.5
+                ],
+                [
+                    0.0,
+                    711.8728819108087,
+                    410.5
+                ],
+                [
+                    0.0,
+                    0.0,
+                    1.0
+                ]
+            ]
+        }
+    },
+    "vertices": [
+        [
+            [
+                0.461700439453125,
+                -0.45669275522232056
+            ]
+        ],
+        [
+            [
+                -0.5396929979324341,
+                -0.4580613672733307
+            ]
+        ],
+        [
+            [
+                -0.5212900042533875,
+                0.35700321197509766
+            ]
+        ],
+        [
+            [
+                0.43428346514701843,
+                0.36788055300712585
+            ]
+        ]
+    ]
+}
+```
 
 
