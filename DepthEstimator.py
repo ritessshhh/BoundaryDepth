@@ -12,8 +12,11 @@ import json
 
 
 class BoundaryDepthExtractor:
-    def __init__(self):
+    def __init__(self, default_zoom=0.5, default_up_vector=[0, 1, 0], default_front_vector=[0, 0, 1]):
         # Initialize the Depth Estimator
+        self.default_zoom = default_zoom
+        self.default_up_vector = default_up_vector
+        self.default_front_vector = default_front_vector
         self.start = """# .PCD v.7 - Point Cloud Data file format
 VERSION .7
 FIELDS x y z
@@ -27,7 +30,7 @@ POINTS {0}
 DATA ascii
 """
 
-    def createOBJ(self, input, output, foreground_ratio=0.85, mc_resolution=256, model_save_format='obj'):
+    def createOBJ(self, input, output, foreground_ratio=0.85, mc_resolution=256, model_save_format='obj', num_points=800000):
 
         output_dir = output
         os.makedirs(output_dir, exist_ok=True)
@@ -71,7 +74,7 @@ DATA ascii
         # Apply the rotations
         mesh.rotate(rotation_y, center=mesh.get_center())
         mesh.rotate(rotation_x, center=mesh.get_center())
-        point_cloud = mesh.sample_points_poisson_disk(number_of_points=500000)
+        point_cloud = mesh.sample_points_poisson_disk(number_of_points=num_points)
 
         # Save the point cloud as a PCD file
         o3d.io.write_point_cloud(f"{output}mesh.pcd", point_cloud)
@@ -242,32 +245,35 @@ DATA ascii
         with open(file_name, 'w') as f:
             json.dump(data, f, indent=4)
 
-    def visualizeRenderedScene(self, input, vertices, renderJson=False):
+    def set_default_view(self, view_control, point_cloud):
+        view_control.set_lookat(point_cloud.get_center())
+        view_control.set_up(self.default_up_vector)
+        view_control.set_front(self.default_front_vector)
+        view_control.set_zoom(self.default_zoom)
+
+    def visualizeRenderedScene(self, input, image_path, vertices, renderJson=False):
         # Load the PCD file
         pcd = o3d.io.read_point_cloud(input)
 
+        # Load the image to get its dimensions
+        image = Image.open(image_path)
+        img_width, img_height = image.size
+
         # Visualize the point cloud
         vis = o3d.visualization.Visualizer()
-        vis.create_window()
-
-        # Add the point cloud to the visualizer
+        vis.create_window(width=img_width, height=img_height, window_name='Rendered Scene')
         vis.add_geometry(pcd)
 
-        # Set the view point
+        # Get the view control
         view_ctl = vis.get_view_control()
-        cam_params = view_ctl.convert_to_pinhole_camera_parameters()
 
-        # You can adjust these values to change the camera angle and position
-        cam_params.extrinsic = np.array([[-1, 0, 0, 0],  # Rotate 180 degrees around y-axis
-                                         [0, -1, 0, 0],
-                                         [0, 0, -1, 0.8],  # Invert z-axis to maintain right-handed coordinate system
-                                         [0, 0, 0, 1]])
-
-        view_ctl.convert_from_pinhole_camera_parameters(cam_params)
+        # Set the default view
+        self.set_default_view(view_ctl, pcd)
 
         # Run the visualizer
         vis.run()
         vis.destroy_window()
 
         if renderJson:
+            cam_params = view_ctl.convert_to_pinhole_camera_parameters()
             self.create_json_file(cam_params.extrinsic, cam_params.intrinsic, vertices)
