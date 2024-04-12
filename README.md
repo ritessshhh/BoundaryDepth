@@ -4,7 +4,7 @@ This project implements a multi-step pipeline for extracting boundary depth from
 
 ## Installation
 
-Before running the script, ensure that you have Python 3.6 or newer installed on your system. You will also need to install the following dependencies:
+Before running the script, ensure that you have python env in the same directory and it's activated:
 
 ```bash
 pip install -r requirements.txt
