@@ -30,7 +30,7 @@ pip install -r requirements.txt
 ## Polygon Approximation:
 <img width="500" alt="Screenshot 2024-04-05 at 2 14 29 AM" src="https://github.com/ritessshhh/BoundaryDepthExtraction/assets/81812754/6aa05bf7-7d51-41e6-b4bc-eee72bb48528">
 
-## Camera Parameters (Saved as a JSON file):
+## Camera Parameters and Vertices(Saved as a JSON file):
 ```bash
 {
     "camera": {
